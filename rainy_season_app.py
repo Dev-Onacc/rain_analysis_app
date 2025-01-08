@@ -1,6 +1,10 @@
-import streamlit as st
+import streamlit as st 
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
+
+# Ajouter un logo en en-tête
+st.image("logo.png", width=80)  # Remplacez "logo.png" par le chemin de votre logo
+st.title("Visualisation interactive de la saison des pluies (Seuil ≥ 1 mm/jour)")
 
 # Load the dataset (assume the data has already been preprocessed)
 @st.cache_data
@@ -13,7 +17,9 @@ def load_data():
     data["time"] = pd.to_datetime(data["time"])
     data["year"] = data["time"].dt.year
     data["month"] = data["time"].dt.month
-    data["is_rainy"] = data["precipitation"] > 0
+    
+    # Apply the precipitation threshold of ≥ 1 mm/day
+    data["is_rainy"] = data["precipitation"] >= 1
 
     # Map location_id to locality names
     locality_mapping = {
@@ -46,7 +52,6 @@ def calculate_rainy_season(data):
     return rainy_season_duration
 
 # Main app
-st.title("Visualisation de la saison des pluies")
 
 # Load and process the data
 data = load_data()
@@ -65,24 +70,31 @@ locality_rainy_days = rainy_days[rainy_days["locality"] == locality]
 locality_rainy_season = rainy_season[rainy_season["locality"] == locality]
 
 # Visualization: Number of rainy days per year
-st.subheader(f"Nombre de jours de pluie par an en {locality}")
-fig, ax = plt.subplots()
-ax.bar(locality_rainy_days["year"], locality_rainy_days["rainy_days"], color="blue")
-ax.set_xlabel("Année")
-ax.set_ylabel("Jours de pluie")
-ax.set_title("Jours de pluie par an")
-st.pyplot(fig)
+st.subheader(f"Nombre de jours de pluie par an à {locality}")
+fig_rainy_days = px.bar(
+    locality_rainy_days,
+    x="year",
+    y="rainy_days",
+    labels={"year": "Année", "rainy_days": "Jours de pluie"},
+    title=f"Jours de pluie par an à {locality}",
+    color="rainy_days",
+    color_continuous_scale="Blues"
+)
+fig_rainy_days.update_layout(hovermode="x unified")
+st.plotly_chart(fig_rainy_days)
 
 # Visualization: Rainy season duration
-st.subheader(f"Durée de la saison des pluies en {locality}")
-fig, ax = plt.subplots()
-ax.bar(locality_rainy_season["year"], locality_rainy_season["season_duration"], color="green")
-ax.set_xlabel("Année")
-ax.set_ylabel("Durée (mois)")
-ax.set_title("Durée de la saison des pluies")
-st.pyplot(fig)
+st.subheader(f"Durée de la saison des pluies à {locality}")
+fig_rainy_season = px.bar(
+    locality_rainy_season,
+    x="year",
+    y="season_duration",
+    labels={"year": "Année", "season_duration": "Durée (mois)"},
+    title=f"Durée de la saison des pluies à {locality}",
+    color="season_duration",
+    color_continuous_scale="Greens"
+)
+fig_rainy_season.update_layout(hovermode="x unified")
+st.plotly_chart(fig_rainy_season)
 
-st.write("Cette application permet de visualiser le nombre de jours de pluie et la durée de la saison des pluies par localité.")
-
-
-
+st.write("Cette application permet de visualiser interactivement le nombre de jours de pluie (seuil ≥ 1 mm/jour) et la durée de la saison des pluies par localité.")
