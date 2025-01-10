@@ -4,7 +4,7 @@ import plotly.express as px
 
 # Ajouter un logo en en-tête
 st.image("logo.png", width=80)  # Remplacez "logo.png" par le chemin de votre logo
-st.title("Visualisation interactive de la saison des pluies (Seuil ≥ 1 mm/jour)")
+st.title("Visualisation interactive de la saison des pluies")
 
 # Load the dataset (assume the data has already been preprocessed)
 @st.cache_data
@@ -18,9 +18,6 @@ def load_data():
     data["year"] = data["time"].dt.year
     data["month"] = data["time"].dt.month
     
-    # Apply the precipitation threshold of ≥ 1 mm/day
-    data["is_rainy"] = data["precipitation"] >= 1
-
     # Map location_id to locality names
     locality_mapping = {
         0: "Yaounde",
@@ -38,14 +35,16 @@ def load_data():
 
     return data
 
-# Calculate the number of rainy days per year and locality
+# Calculate the number of rainy days per year and locality based on threshold
 @st.cache_data
-def calculate_rainy_days(data):
+def calculate_rainy_days(data, threshold):
+    data["is_rainy"] = data["precipitation"] >= threshold
     return data.groupby(["locality", "year"])["is_rainy"].sum().reset_index(name="rainy_days")
 
-# Calculate the average rainy season duration per locality
+# Calculate the average rainy season duration per locality based on threshold
 @st.cache_data
-def calculate_rainy_season(data):
+def calculate_rainy_season(data, threshold):
+    data["is_rainy"] = data["precipitation"] >= threshold
     monthly_rainy_days = data.groupby(["locality", "year", "month"])["is_rainy"].sum().reset_index(name="rainy_days")
     rainy_season = monthly_rainy_days[monthly_rainy_days["rainy_days"] > 15]
     rainy_season_duration = rainy_season.groupby(["locality", "year"]).size().reset_index(name="season_duration")
@@ -55,8 +54,13 @@ def calculate_rainy_season(data):
 
 # Load and process the data
 data = load_data()
-rainy_days = calculate_rainy_days(data)
-rainy_season = calculate_rainy_season(data)
+
+# User input for precipitation threshold
+threshold = st.number_input("Entrez le seuil de précipitation (mm/jour) :", min_value=1.0, value=1.0, step=0.1)
+
+# Calculate rainy days and rainy season based on user-defined threshold
+rainy_days = calculate_rainy_days(data, threshold)
+rainy_season = calculate_rainy_season(data, threshold)
 
 # Display dataset sample for verification
 if st.checkbox("Afficher les données brutes"):
@@ -70,7 +74,7 @@ locality_rainy_days = rainy_days[rainy_days["locality"] == locality]
 locality_rainy_season = rainy_season[rainy_season["locality"] == locality]
 
 # Visualization: Number of rainy days per year
-st.subheader(f"Nombre de jours de pluie par an à {locality}")
+st.subheader(f"Nombre de jours de pluie par an à {locality} (Seuil ≥ {threshold} mm/jour)")
 fig_rainy_days = px.bar(
     locality_rainy_days,
     x="year",
@@ -84,7 +88,7 @@ fig_rainy_days.update_layout(hovermode="x unified")
 st.plotly_chart(fig_rainy_days)
 
 # Visualization: Rainy season duration
-st.subheader(f"Durée de la saison des pluies à {locality}")
+st.subheader(f"Durée de la saison des pluies à {locality} (Seuil ≥ {threshold} mm/jour)")
 fig_rainy_season = px.bar(
     locality_rainy_season,
     x="year",
@@ -97,4 +101,19 @@ fig_rainy_season = px.bar(
 fig_rainy_season.update_layout(hovermode="x unified")
 st.plotly_chart(fig_rainy_season)
 
-st.write("Cette application permet de visualiser interactivement le nombre de jours de pluie (seuil ≥ 1 mm/jour) et la durée de la saison des pluies par localité.")
+# Prepare data for download
+export_data = pd.DataFrame({
+    'Année': locality_rainy_days['year'],
+    'Jours de pluie': locality_rainy_days['rainy_days'],
+    'Durée de la saison (mois)': locality_rainy_season['season_duration'].reindex(locality_rainy_days.index, fill_value=0)  # Aligning indices for correct export
+})
+
+# Download button for exporting the data
+st.download_button(
+    label="Télécharger les données",
+    data=export_data.to_csv(index=False).encode('utf-8'),
+    file_name=f"{locality}_pluie_donnees.csv",
+    mime='text/csv'
+)
+
+st.write("Cette application permet de visualiser interactivement le nombre de jours de pluie et la durée de la saison des pluies par localité.")
